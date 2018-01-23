@@ -9,8 +9,9 @@
 // Version Information
 #define NAME "RKY-21"
 #define VERSION_MAJ 0
-#define VERSION_MIN 05
-#define RELEASE "dec. 2017"
+#define VERSION_MIN 06
+#define RELEASE "jan. 2018"
+#define CREATE "dec. 2017"
 
 TCPClient client;
 
