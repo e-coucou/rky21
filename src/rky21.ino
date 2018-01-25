@@ -4,6 +4,7 @@
 #if defined TFT
   #include "tft.h"
 #endif
+#include "Adafruit_10DOF_IMU.h"
 //SYSTEM_THREAD(ENABLED);
 // -------------------
 // Version Information
@@ -40,6 +41,10 @@ stParam Param = {1,0,60000};
 #define sid     A5
 ST7735 tft = ST7735(cs, dc, rst); //l'affichage en mode MISO
 #endif
+//--------------------------------------------- Capteurs  -------
+//--                                            -------
+Adafruit_BMP085_Unified       bmp   = Adafruit_BMP085_Unified(18001);
+sensor_t sensor;
 //--------------------------------------------- ArduCAM  -------
 //--                                            -------
 // set pin A2 as the slave select for the ArduCAM shield
@@ -155,6 +160,9 @@ delay(1000);
 
     client.connect(SERVER_ADDRESS, SERVER_TCP_PORT);
     serial_on = Serial.isConnected();
+  // les capteurs ...
+    bmp.begin();
+
 } // -end setup
 //--------------------------------------------------------------------------------------------- LOOP -- //
 volatile unsigned long now, start = 0, count =0, iteration=0;
@@ -164,6 +172,7 @@ char szMessage[30];
 uint16_t menu = 0x0001, mode = 0x0001;
 float cell,status;
 int bytesRead = 0;
+sensors_event_t event;
 
 void loop()
 {
@@ -195,6 +204,33 @@ void loop()
       tft.setTextSize(1);
       tft.setCursor(1,1);
       tft.println(szMessage);
+//    bmp.getSensor(&sensor);
+  /* Display the pressure sensor results (barometric pressure is measure in hPa) */
+  bmp.getEvent(&event);
+  if (event.pressure)
+  {
+    /* Display atmospheric pressure in hPa */
+    Serial.print(F("PRESS "));
+    Serial.print(event.pressure);
+    Serial.print(F(" hPa, "));
+    /* Display ambient temperature in C */
+    float temperature;
+    bmp.getTemperature(&temperature);
+    Serial.print(temperature);
+    Serial.print(F(" C, "));
+    /* Then convert the atmospheric pressure, SLP and temp to altitude    */
+    /* Update this next line with the current SLP for better results      */
+    float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
+    Serial.print(bmp.pressureToAltitude(seaLevelPressure,
+                                        event.pressure,
+                                        temperature)); 
+    Serial.println(F(" m"));
+
+      sprintf(szMessage,"temperature : %5.1f °C",temperature);
+      tft.setTextSize(1);
+      tft.setCursor(1,15);
+      tft.println(szMessage);
+  }
 #endif
   }
 }
