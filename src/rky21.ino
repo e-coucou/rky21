@@ -30,6 +30,8 @@ struct stParam {
 stParam Param = {1,0,60000};
 
 #define WAIT 10
+#define PI 3.1415926
+#define toDEG(rad) ((rad)/PI*180.0)
 #if defined TFT
 //--------------------------------------------- TFT  -------
 //--                                            -----
@@ -44,6 +46,9 @@ ST7735 tft = ST7735(cs, dc, rst); //l'affichage en mode MISO
 //--------------------------------------------- Capteurs  -------
 //--                                            -------
 Adafruit_BMP085_Unified       bmp   = Adafruit_BMP085_Unified(18001);
+Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
+Adafruit_LSM303_Mag_Unified   mag   = Adafruit_LSM303_Mag_Unified(30302);
+Adafruit_L3GD20_Unified       gyro  = Adafruit_L3GD20_Unified(20);
 sensor_t sensor;
 //--------------------------------------------- ArduCAM  -------
 //--                                            -------
@@ -162,7 +167,10 @@ delay(1000);
     serial_on = Serial.isConnected();
   // les capteurs ...
     bmp.begin();
-
+    gyro.begin();
+    accel.begin();
+    mag.begin();
+    aff_Trame();
 } // -end setup
 //--------------------------------------------------------------------------------------------- LOOP -- //
 volatile unsigned long now, start = 0, count =0, iteration=0;
@@ -178,59 +186,56 @@ void loop()
 {
   now = millis(); count++;
   if ((now-start)>Param.timeout) {
-#if defined TFT
-    aff_Click();
-#endif
+    #if defined TFT
+      aff_Click();
+    #endif
     serial_on = Serial.isConnected();
     take_picture();
     start = millis();
     tft_update = true;
     update = 0;
+    aff_Trame();
   } else if ( (now-start)/1000 > update ) {
       update = (now-start)/1000;
-#if defined TFT
+      #if defined TFT
       aff_Heure();
-      sprintf(szMessage,"%2d",Param.timeout/1000-update);
-      tft.setTextColor(ST7735_WHITE);
-      tft.setCursor(140,110);
+      tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
+      tft.setCursor(145,110);
       tft.setTextSize(1);
-      tft.println(szMessage);
+      tft.println(String::format("%2d",Param.timeout/1000-update));
       cell = Power.getVCell();
       status = Power.getSoC();
-      sprintf(szMessage,"%4.1f - %4.2f",status,cell);
       tft.setCursor(1,110);
-      tft.println(szMessage);
-      sprintf(szMessage,"%c %c %c : %5.1f ko",0x0A,0x02,0x01,bytesRead/1024.0);
-      tft.setTextSize(1);
-      tft.setCursor(1,1);
-      tft.println(szMessage);
+      tft.println(String::format("%4.1f - %4.2f",status,cell));
+      tft.setCursor(121,5);
+      tft.println(String::format("%5.1f",bytesRead/1024.0));
 //    bmp.getSensor(&sensor);
   /* Display the pressure sensor results (barometric pressure is measure in hPa) */
   bmp.getEvent(&event);
   if (event.pressure)
   {
-    /* Display atmospheric pressure in hPa */
-    Serial.print(F("PRESS "));
-    Serial.print(event.pressure);
-    Serial.print(F(" hPa, "));
     /* Display ambient temperature in C */
     float temperature;
     bmp.getTemperature(&temperature);
-    Serial.print(temperature);
-    Serial.print(F(" C, "));
-    /* Then convert the atmospheric pressure, SLP and temp to altitude    */
-    /* Update this next line with the current SLP for better results      */
-    float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
-    Serial.print(bmp.pressureToAltitude(seaLevelPressure,
-                                        event.pressure,
-                                        temperature)); 
-    Serial.println(F(" m"));
-
-      sprintf(szMessage,"temperature : %5.1f °C",temperature);
-      tft.setTextSize(1);
-      tft.setCursor(1,15);
-      tft.println(szMessage);
+      tft.setCursor(1,5);tft.println(String::format("%4.1f",temperature));
+      tft.setCursor(10,14);tft.println("C");
+      tft.setCursor(41,5);tft.println(String::format("%5.0f",event.pressure));
+      tft.setCursor(45,14);tft.println("hPa");
+      tft.setCursor(81,5);tft.println(String::format("%5.0f",bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA,event.pressure,temperature)));
+      tft.setCursor(90,14);tft.println("m");
   }
+  gyro.getEvent(&event);
+  sprintf(szMessage,"(%5.1f,%5.1f,%5.1f)",toDEG(event.gyro.x),toDEG(event.gyro.y),toDEG(event.gyro.z));  
+  tft.setCursor(1,90);
+  tft.println(szMessage);
+  accel.getEvent(&event);
+  sprintf(szMessage,"(%5.0f,%5.0f,%5.0f)",event.acceleration.x*100.0,event.acceleration.y*100.0,event.acceleration.z*100.0);  
+  tft.setCursor(1,100);
+  tft.println(szMessage);
+  mag.getEvent(&event);
+  sprintf(szMessage,"(%5.0f,%5.0f,%5.0f)",event.magnetic.x*100.0,event.magnetic.y*100.0,event.magnetic.z*100.0);  
+  tft.setCursor(1,80);
+  tft.println(szMessage);
 #endif
   }
 }
@@ -417,10 +422,10 @@ void aff_Heure() {
     sprintf(szMess,"%2d:%s%d",heure,minute>9 ? "":"0",minute);
 //    tft.fillRect(0,0,tft.width(),tft.height(),ST7735_BLACK);
 //    tft.setTextColor(tft.Color565(0xAF,0xEE,0xEE));
-    tft.fillScreen(ST7735_BLACK);
-    tft.setTextColor(ST7735_WHITE);
-    tft.setCursor(20,50);
-    tft.setTextSize(4);
+//    tft.fillScreen(ST7735_BLACK);
+    tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
+    tft.setCursor(15,43);
+    tft.setTextSize(3);
     tft.println(szMess);
     tft_update = false;
 }
@@ -432,12 +437,14 @@ void aff_Date() {
     sprintf(szMess,"%2d/%2d/%4d",jour,mois,annee);
 //    tft.fillRect(0,0,tft.width(),tft.height(),ST7735_BLACK);
 //    tft.setTextColor(tft.Color565(0xAF,0xEE,0xEE));
-    tft.fillScreen(ST7735_BLACK);
-    tft.setTextColor(ST7735_WHITE);
-    tft.setCursor(10,50);
-    tft.setTextSize(2);
-    tft.println(szMess);
-    tft_update = false;
+//    tft.fillScreen(ST7735_BLACK);
+    tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
+    tft.setTextSize(1);
+    tft.setCursor(140,37);tft.println(String::format("%2d",jour));
+    tft.setCursor(140,47);tft.println(String::format("%2d",mois));
+    tft.setCursor(130,57);tft.println(String::format("%2d",annee));
+//    tft.println(szMess);
+//    tft_update = false;
 }
 void aff_Click() {
     char szMess[20];
@@ -450,6 +457,15 @@ void aff_Click() {
     tft.setTextSize(4);
     tft.println(szMess);
     tft_update = false;
+}
+void aff_Trame() {
+  tft.fillScreen(ST7735_BLACK);
+  tft.drawFastHLine(0,33,160,ST7735_WHITE);
+  tft.drawFastHLine(0,75,160,ST7735_WHITE);
+  tft.drawFastVLine(40,0,33,ST7735_WHITE);
+  tft.drawFastVLine(80,0,33,ST7735_WHITE);
+  tft.drawFastVLine(120,0,120,ST7735_WHITE);
+  aff_Date();
 }
 #endif
 
