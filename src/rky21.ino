@@ -61,6 +61,8 @@ bool serial_on;
 
 Power Power;
 
+String Mois[12] = {"JAN", "FEV", "MAR","AVR","MAI","JUN","JUI","AOU","SEP","OCT","NOV","DEC"};
+
 void setup()
 {
   Particle.publish("status", "by e-Coucou 2017");
@@ -440,8 +442,8 @@ void aff_Date() {
 //    tft.fillScreen(ST7735_BLACK);
     tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
     tft.setTextSize(1);
-    tft.setCursor(140,37);tft.println(String::format("%2d",jour));
-    tft.setCursor(140,47);tft.println(String::format("%2d",mois));
+    tft.setCursor(137,37);tft.println(String::format("%2d",jour));
+    tft.setCursor(133,47);tft.println(Mois[mois-1]);
     tft.setCursor(130,57);tft.println(String::format("%2d",annee));
 //    tft.println(szMess);
 //    tft_update = false;
