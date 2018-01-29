@@ -11,8 +11,9 @@
 // -------------------
 // Version Information
 #define NAME "RKY-21"
+#define AUTEUR "e-Coucou"
 #define VERSION_MAJ 0
-#define VERSION_MIN 06
+#define VERSION_MIN 07
 #define RELEASE "jan. 2018"
 #define CREATE "dec. 2017"
 
@@ -64,10 +65,11 @@ bool serial_on;
 Power Power;
 
 String Mois[12] = {"JAN", "FEV", "MAR", "AVR", "MAI", "JUN", "JUI", "AOU", "SEP", "OCT", "NOV", "DEC"};
-char* url = "http://dataservice.accuweather.com/currentconditions/v1/623.json?langage=fr-fr&details=false&apikey=OU3bvqL9RzlrtSqXAJwg93E1Tlo3grVS";
+
 HttpClient http;  
 http_header_t headers[] = {  
     { "Content-Type", "application/json" },  
+    { "Accept" , "application/json" },
     { NULL, NULL }   
  };  
 http_request_t request;  
@@ -182,9 +184,6 @@ delay(1000);
     gyro.begin();
     accel.begin();
     mag.begin();
-	// serveur Accuweather
-	request.hostname = "http://dataservice.accuweather.com"; //IPAddress(192,168,1,169);  
-	request.port = 80;  
 	
     aff_Trame();
 } // -end setup
@@ -215,28 +214,23 @@ void loop()
       update = (now-start)/1000;
       #if defined TFT
       aff_Heure();
-      tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
-      tft.setCursor(150,110);
+      tft.setTextColor(ST7735_YELLOW,ST7735_BLACK);
+      tft.setCursor(145,24);
       tft.setTextSize(1);
       tft.println(String::format("%2d",Param.timeout/1000-update));
-      cell = Power.getVCell();
-      status = Power.getSoC();
-      tft.setCursor(1,110);
-      tft.println(String::format("%c %4.1f - %4.2f",0x0b,status,cell));
-      tft.setCursor(121,5);
-      tft.println(String::format("%5.1f",bytesRead/1024.0));
 //    bmp.getSensor(&sensor);
   /* Display the pressure sensor results (barometric pressure is measure in hPa) */
+      tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
   bmp.getEvent(&event);
   if (event.pressure)
   {
     /* Display ambient temperature in C */
     float temperature;
     bmp.getTemperature(&temperature);
-      tft.setCursor(1,5);tft.println(String::format("%4.1f",temperature));
-      tft.setCursor(10,14);tft.println("C");
-      tft.setCursor(41,5);tft.println(String::format("%5.0f",event.pressure));
-      tft.setCursor(45,14);tft.println("hPa");
+      tft.setCursor(1,5);tft.println(String::format("I %4.1f",temperature));
+      tft.setCursor(12,14);tft.println("C");
+      tft.setCursor(41,5);tft.println(String::format("I %5.0f",event.pressure));
+      tft.setCursor(49,14);tft.println("hPa");
       tft.setCursor(81,5);tft.println(String::format("%5.0f",bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA,event.pressure,temperature)));
       tft.setCursor(90,14);tft.println("m");
   }
@@ -252,8 +246,6 @@ void loop()
   sprintf(szMessage,"(%5.0f,%5.0f,%5.0f)",event.magnetic.x*100.0,event.magnetic.y*100.0,event.magnetic.z*100.0);  
   tft.setCursor(1,80);
   tft.println(szMessage);
-  tft.setCursor(135,110);
-  tft.println(String::format("%c",isPicture ? 'I' : '-'));
 #endif
   }
 }
@@ -438,14 +430,18 @@ void aff_Heure() {
     char szMess[20];
     int heure = int(Time.hour());
     int minute = int(Time.minute());
+    int seconde = int(Time.second());
     sprintf(szMess,"%2d:%s%d",heure,minute>9 ? "":"0",minute);
 //    tft.fillRect(0,0,tft.width(),tft.height(),ST7735_BLACK);
 //    tft.setTextColor(tft.Color565(0xAF,0xEE,0xEE));
 //    tft.fillScreen(ST7735_BLACK);
     tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
-    tft.setCursor(15,43);
+    tft.setCursor(8,43);
     tft.setTextSize(3);
     tft.println(szMess);
+    tft.setCursor(105,43);
+    tft.setTextSize(1);
+    tft.println(String::format("%s%d",seconde>9 ? "":"0", seconde));
     tft_update = false;
 }
 void aff_Date() {
@@ -480,22 +476,80 @@ void aff_Click() {
 void aff_Trame() {
   tft.fillScreen(ST7735_BLACK);
   tft.drawFastHLine(0,33,160,ST7735_WHITE);
-  tft.drawFastHLine(0,75,160,ST7735_WHITE);
+  tft.drawFastHLine(0,73,160,ST7735_WHITE);
   tft.drawFastVLine(40,0,33,ST7735_WHITE);
   tft.drawFastVLine(80,0,33,ST7735_WHITE);
   tft.drawFastVLine(120,0,120,ST7735_WHITE);
+  tft.setTextColor(ST7735_BLUE,ST7735_BLACK);
+  tft.setTextSize(1);
+  tft.setCursor(1,121);
+  tft.println(String::format("%s %d.%d (%s)",AUTEUR,VERSION_MAJ,VERSION_MIN,RELEASE));
+  tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
+  tft.setCursor(125,1);
+  tft.println(String::format("%5.1f",bytesRead/1024.0));
+  tft.setCursor(135,24);
+  tft.println(String::format("%c",isPicture ? 'V' : 'x'));
   aff_Date();
+  getRequest();
+  getBatterie();
 }
 #endif
 
+void getBatterie() {
+  cell = Power.getVCell();
+  status = Power.getSoC();
+  tft.setCursor(127,88);
+  tft.setTextSize(1);
+  tft.setTextColor(status>50.0 ? ST7735_GREEN : ST7735_RED,ST7735_BLACK);
+  tft.println(String::format("%c %2.0f%%",0x0b+int(status/25.0+0.4),status));
+  tft.setCursor(127,98);
+  tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
+  tft.println(String::format("%3.1f V",cell));
+
+}
 void getRequest() {  
    
-   request.path = "/currentconditions/v1/623.json?langage=fr-fr&details=false&apikey=OU3bvqL9RzlrtSqXAJwg93E1Tlo3grVS";  
-   request.body = "";  
+  // serveur Accuweather
+  request.hostname = "dataservice.accuweather.com"; //IPAddress(192,168,1,169); 
+  request.hostname = "apidev.accuweather.com"; //from internet
+  request.port = 80;
+  request.path = "/currentconditions/v1/623.json?language=en&details=false&apikey=hoArfRosT1215"; //OU3bvqL9RzlrtSqXAJwg93E1Tlo3grVS";  
+  request.path = "/currentconditions/v1/623.json?language=fr-fr&details=true&apikey=hoArfRosT1215"; //from inetnet
+  request.body = "";
    
-   http.get(request, response, headers);
-   
-   Serial.println(response.status);  
-   Serial.println(response.body);  
+  http.get(request, response, headers);
+  tft.setCursor(129,78);
+  tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
+  tft.setTextSize(1);
+  tft.println(response.status);
+//  Serial.println(request.url);
+  Serial.println(response.status);
+  Serial.println(response.body);  
+  String key1 = "WeatherText";
+  String Meteo = KeyJson(key1 , response.body);
+  String Jour = KeyJson("IsDayTime" , response.body);
+  String jsonTemp = KeyJson("Temperature" , response.body);
+  String Temperature = KeyJson("Value",jsonTemp);
+  String Humidite = KeyJson("RelativeHumidity",response.body);
+  jsonTemp = KeyJson("Wind" , response.body);
+  Serial.println(jsonTemp);
+  String Vent = KeyJson("Degrees", jsonTemp);
+  tft.setCursor(1,112);
+  tft.setTextColor(ST7735_YELLOW,ST7735_BLACK);
+  tft.setTextSize(1);
+  tft.println(Meteo+" "+Jour +" "+Humidite);
+  tft.setCursor(5,22);tft.println(Temperature);
  }  
 
+String KeyJson(const String& k, const String& j){
+  int keyStartsAt = j.indexOf(k);
+  Serial.println( keyStartsAt );
+  int keyEndsAt = keyStartsAt + k.length(); // inludes double quote
+  Serial.println( keyEndsAt );
+  int colonPosition = j.indexOf(":", keyEndsAt);
+  int valueEndsAt = j.indexOf(",", colonPosition);
+  String val = j.substring(colonPosition + 1, valueEndsAt);
+  val.trim();
+  Serial.println( val );
+  return val;
+}
