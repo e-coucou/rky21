@@ -5,6 +5,8 @@
   #include "tft.h"
 #endif
 #include "Adafruit_10DOF_IMU.h"
+#include "HttpClient.h"
+
 //SYSTEM_THREAD(ENABLED);
 // -------------------
 // Version Information
@@ -61,7 +63,15 @@ bool serial_on;
 
 Power Power;
 
-String Mois[12] = {"JAN", "FEV", "MAR","AVR","MAI","JUN","JUI","AOU","SEP","OCT","NOV","DEC"};
+String Mois[12] = {"JAN", "FEV", "MAR", "AVR", "MAI", "JUN", "JUI", "AOU", "SEP", "OCT", "NOV", "DEC"};
+char* url = "http://dataservice.accuweather.com/currentconditions/v1/623.json?langage=fr-fr&details=false&apikey=OU3bvqL9RzlrtSqXAJwg93E1Tlo3grVS";
+HttpClient http;  
+http_header_t headers[] = {  
+    { "Content-Type", "application/json" },  
+    { NULL, NULL }   
+ };  
+http_request_t request;  
+http_response_t response;  
 
 void setup()
 {
@@ -172,6 +182,10 @@ delay(1000);
     gyro.begin();
     accel.begin();
     mag.begin();
+	// serveur Accuweather
+	request.hostname = "http://dataservice.accuweather.com"; //IPAddress(192,168,1,169);  
+	request.port = 80;  
+	
     aff_Trame();
 } // -end setup
 //--------------------------------------------------------------------------------------------- LOOP -- //
@@ -183,7 +197,7 @@ uint16_t menu = 0x0001, mode = 0x0001;
 float cell,status;
 int bytesRead = 0;
 sensors_event_t event;
-
+char isPicture = 0;
 void loop()
 {
   now = millis(); count++;
@@ -192,7 +206,7 @@ void loop()
       aff_Click();
     #endif
     serial_on = Serial.isConnected();
-    take_picture();
+    isPicture = take_picture();
     start = millis();
     tft_update = true;
     update = 0;
@@ -202,13 +216,13 @@ void loop()
       #if defined TFT
       aff_Heure();
       tft.setTextColor(ST7735_WHITE,ST7735_BLACK);
-      tft.setCursor(145,110);
+      tft.setCursor(150,110);
       tft.setTextSize(1);
       tft.println(String::format("%2d",Param.timeout/1000-update));
       cell = Power.getVCell();
       status = Power.getSoC();
       tft.setCursor(1,110);
-      tft.println(String::format("%4.1f - %4.2f",status,cell));
+      tft.println(String::format("%c %4.1f - %4.2f",0x0b,status,cell));
       tft.setCursor(121,5);
       tft.println(String::format("%5.1f",bytesRead/1024.0));
 //    bmp.getSensor(&sensor);
@@ -238,15 +252,17 @@ void loop()
   sprintf(szMessage,"(%5.0f,%5.0f,%5.0f)",event.magnetic.x*100.0,event.magnetic.y*100.0,event.magnetic.z*100.0);  
   tft.setCursor(1,80);
   tft.println(szMessage);
+  tft.setCursor(135,110);
+  tft.println(String::format("%c",isPicture ? 'I' : '-'));
 #endif
   }
 }
 //-------------------------------------------------------------------------------------------- end LOOP //
-void take_picture() {
+char take_picture() {
   if (!client.connected()) {
     if (!client.connect(SERVER_ADDRESS, SERVER_TCP_PORT)) {
       delay(2000);
-      return;
+      return -1;
     }
   }
   if (serial_on) Serial.println("Taking a picture...");
@@ -333,6 +349,7 @@ void take_picture() {
       if (serial_on) Serial.println(String::format("Photo [%d] : %d octets, resolution = %X",iteration,bytesRead,Param.resolution));
   }
   interrupts();
+  return 1;
 } // - end Picture
 //------------------------------------------------------------------ Web Commande ------
 //--                                                                 ------------
@@ -470,4 +487,15 @@ void aff_Trame() {
   aff_Date();
 }
 #endif
+
+void getRequest() {  
+   
+   request.path = "/currentconditions/v1/623.json?langage=fr-fr&details=false&apikey=OU3bvqL9RzlrtSqXAJwg93E1Tlo3grVS";  
+   request.body = "";  
+   
+   http.get(request, response, headers);
+   
+   Serial.println(response.status);  
+   Serial.println(response.body);  
+ }  
 
