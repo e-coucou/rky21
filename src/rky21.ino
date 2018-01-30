@@ -6,6 +6,7 @@
 #endif
 #include "Adafruit_10DOF_IMU.h"
 #include "HttpClient.h"
+#include "neopixel.h"
 
 //SYSTEM_THREAD(ENABLED);
 // -------------------
@@ -13,24 +14,24 @@
 #define NAME "RKY-21"
 #define AUTEUR "e-Coucou"
 #define VERSION_MAJ 0
-#define VERSION_MIN 07
+#define VERSION_MIN 08
 #define RELEASE "jan. 2018"
 #define CREATE "dec. 2017"
 /* 
-				 -----[    ]-----
-				-|VIN        3V3|-    
-				-|GND        RST|-
-				-|TX        VBAT|-
-				-|RX         GND|-
-				-|WKP         D7|-
-				-|DAC         D6|- NeoPixel Ring
-	SID	| MOSI  -|A5          D5|- RST | TFT
-		| MISO  -|A4          D4|- CS  | TFT
-	SCL	| SCHK	-|A3          D3|- ALERT interrupt from MAX17043 (optional solder bridge)
+				         -----[    ]-----
+				        -|VIN        3V3|-    
+				        -|GND        RST|-
+				        -|TX        VBAT|-
+				        -|RX         GND|-
+				        -|WKP         D7|-
+				        -|DAC         D6|- NeoPixel Ring
+	SID	  |  MOSI -|A5          D5|- RST | TFT
+		    |  MISO -|A4          D4|- CS  | TFT
+	SCL	  |  SCHK	-|A3          D3|- ALERT interrupt from MAX17043 (optional solder bridge)
    Arducam | SS -|A2          D2|- DC  | TFT
-				-|A1          D1|- SCL |- I2C channel ArduCAM + Gyro
-				-|A0          D0|- SDA |
-				  \____________/
+				        -|A1          D1|- SCL |- I2C channel ArduCAM + Gyro
+				        -|A0          D0|- SDA |
+				          \____________/
  
 */
 
@@ -48,6 +49,16 @@ struct stParam {
   unsigned long timeout;
 };
 stParam Param = {1,0,60000};
+
+struct stAccuWeather {
+  float Temperature,Vitesse;
+  String ciel;
+  String Sens;
+  int Direction,Humidite;
+  bool jour, data;
+};
+stAccuWeather Meteo;
+//Meteo.data = false;
 
 // NeoPixel
 #define LAMP_PIN D6
@@ -217,6 +228,10 @@ delay(1000);
     gyro.begin();
     accel.begin();
     mag.begin();
+
+    Lamp_color(0x00342523,0xFF); delay(2000);
+    rainbow(20);
+    Lamp_color(0x0, 0xFFFF);
 	
     aff_Trame();
 } // -end setup
@@ -525,6 +540,8 @@ void aff_Trame() {
   aff_Date();
   getRequest();
   getBatterie();
+//  rainbow(20);
+//  Lamp_color(0x0,0xFFFF);
 }
 #endif
 
@@ -544,6 +561,7 @@ void getBatterie() {
 void getRequest() {  
    
   // serveur Accuweather
+  Meteo.data = false;
   request.hostname = "dataservice.accuweather.com"; //IPAddress(192,168,1,169); 
   request.hostname = "apidev.accuweather.com"; //from internet
   request.port = 80;
@@ -558,28 +576,34 @@ void getRequest() {
   tft.println(response.status);
 //  Serial.println(request.url);
   Serial.println(response.status);
-  Serial.println(response.body);  
-  String key1 = "WeatherText";
-  String Meteo = KeyJson(key1 , response.body);
-  String Jour = KeyJson("IsDayTime" , response.body);
-  String jsonTemp = KeyJson("Temperature" , response.body);
-  String Temperature = KeyJson("Value",jsonTemp);
-  String Humidite = KeyJson("RelativeHumidity",response.body);
-  jsonTemp = KeyJson("Wind" , response.body);
-  Serial.println(jsonTemp);
-  String Vent = KeyJson("Degrees", jsonTemp);
-  tft.setCursor(1,112);
-  tft.setTextColor(ST7735_YELLOW,ST7735_BLACK);
-  tft.setTextSize(1);
-  tft.println(Meteo+" "+Jour +" "+Humidite);
-  tft.setCursor(5,22);tft.println(Temperature);
+  Serial.println(response.body);
+  if (response.status == 200) { 
+    String key1 = "WeatherText";
+    Meteo.ciel = KeyJson(key1 , response.body);
+    Meteo.jour =  (KeyJson("IsDayTime" , response.body) == "false") ? false : true;
+    String jsonTemp = KeyJson("Temperature" , response.body);
+    Meteo.Temperature = atof(KeyJson("Value",jsonTemp).c_str());
+    Meteo.Humidite = atoi(KeyJson("RelativeHumidity",response.body).c_str());
+    jsonTemp = KeyJson("Wind" , response.body);
+    Serial.println(jsonTemp);
+    Meteo.Direction = atoi(KeyJson("Degrees", jsonTemp).c_str());
+    Meteo.Sens = KeyJson("Localized", response.body);
+    jsonTemp = KeyJson("Speed" , response.body);
+    Meteo.Vitesse = atof(KeyJson("Value" , jsonTemp).c_str());
+    tft.setCursor(1,112);
+    tft.setTextColor(ST7735_YELLOW,ST7735_BLACK);
+    tft.setTextSize(1);
+    tft.println(Meteo.ciel+" "+Meteo.Humidite);
+    tft.setCursor(5,22);tft.println(Meteo.Temperature);
+    Meteo.data = true;
+  }
  }  
 
 String KeyJson(const String& k, const String& j){
   int keyStartsAt = j.indexOf(k);
-  Serial.println( keyStartsAt );
+//  Serial.println( keyStartsAt );
   int keyEndsAt = keyStartsAt + k.length(); // inludes double quote
-  Serial.println( keyEndsAt );
+//  Serial.println( keyEndsAt );
   int colonPosition = j.indexOf(":", keyEndsAt);
   int valueEndsAt = j.indexOf(",", colonPosition);
   String val = j.substring(colonPosition + 1, valueEndsAt);
