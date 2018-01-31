@@ -7,6 +7,7 @@
 #include "Adafruit_10DOF_IMU.h"
 #include "HttpClient.h"
 #include "neopixel.h"
+#include "Adafruit_TCS34725.h"
 
 //SYSTEM_THREAD(ENABLED);
 // -------------------
@@ -14,7 +15,7 @@
 #define NAME "RKY-21"
 #define AUTEUR "e-Coucou"
 #define VERSION_MAJ 0
-#define VERSION_MIN 08
+#define VERSION_MIN 9
 #define RELEASE "jan. 2018"
 #define CREATE "dec. 2017"
 /* 
@@ -60,6 +61,13 @@ struct stAccuWeather {
 stAccuWeather Meteo;
 //Meteo.data = false;
 
+// Surveillance
+double illum_m = 0;
+bool alert_illum  = false;
+double luminosite,illumination;  // mesure de la luminosite
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_24MS, TCS34725_GAIN_1X);
+uint16_t clear, red, green, blue;
+double r, g, b, wh;
 // NeoPixel
 #define LAMP_PIN D6
 #define LAMP_COUNT 16
@@ -248,6 +256,26 @@ char isPicture = 0;
 void loop()
 {
   now = millis(); count++;
+  //---------------------------------------------------------------- SENSORS ------
+  //-- Gestion des sensors
+  //--
+    //-- Toutes les 500ms on récupère les infos de luminosité
+    //-- 
+    if ((millis() % 500) >= 400) {
+      tcs.getRawData(&red, &green, &blue, &clear);
+      wh = clear;
+      r = red/wh *256.0;
+      g = green/wh *256.0;
+      b = blue/wh *256.0;
+      illumination =  (-0.32466 * red) + (1.57837 * green) + (-0.73191 * blue); //
+      illum_m = (illum_m * 11.0/12.0) + (illumination / 12.0);
+      luminosite = illum_m; /// pour debug
+      // gestion d'alerte par proximité
+      if ( (abs(illumination) < abs(0.5*illum_m)) && abs(illum_m < 30.0) ) {
+         alert_illum = true;
+      }
+      Serial.println(String::format("Illumination : %f, luminosite : %f",illumination,luminosite));
+    }
   if ((now-start)>Param.timeout) {
     #if defined TFT
       aff_Click();
@@ -275,25 +303,29 @@ void loop()
     /* Display ambient temperature in C */
     float temperature;
     bmp.getTemperature(&temperature);
-      tft.setCursor(1,5);tft.println(String::format("I %4.1f",temperature));
-      tft.setCursor(12,14);tft.println("C");
-      tft.setCursor(41,5);tft.println(String::format("I %5.0f",event.pressure));
-      tft.setCursor(49,14);tft.println("hPa");
+      tft.setCursor(1,5);tft.println(String::format("%4.1f C",temperature));
+      tft.setCursor(41,5);tft.println(String::format("%5.0f",event.pressure));
+      tft.setCursor(51,14);tft.println("hPa");
       tft.setCursor(81,5);tft.println(String::format("%5.0f",bmp.pressureToAltitude(SENSORS_PRESSURE_SEALEVELHPA,event.pressure,temperature)));
       tft.setCursor(90,14);tft.println("m");
   }
   gyro.getEvent(&event);
   sprintf(szMessage,"(%5.1f,%5.1f,%5.1f)",toDEG(event.gyro.x),toDEG(event.gyro.y),toDEG(event.gyro.z));  
   tft.setCursor(1,90);
-  tft.println(szMessage);
+//  tft.println(szMessage);
   accel.getEvent(&event);
   sprintf(szMessage,"(%5.0f,%5.0f,%5.0f)",event.acceleration.x*100.0,event.acceleration.y*100.0,event.acceleration.z*100.0);  
   tft.setCursor(1,100);
-  tft.println(szMessage);
+//  tft.println(szMessage);
   mag.getEvent(&event);
   sprintf(szMessage,"(%5.0f,%5.0f,%5.0f)",event.magnetic.x*100.0,event.magnetic.y*100.0,event.magnetic.z*100.0);  
   tft.setCursor(1,80);
-  tft.println(szMessage);
+//  tft.println(szMessage);
+  if (Meteo.data) {
+    tft.setCursor(1,80); tft.println(String::format("T : %4.1f°C Hum : %d %%",Meteo.Temperature,Meteo.Humidite));
+    tft.setCursor(1,90); tft.println(Meteo.ciel);
+    tft.setCursor(1,100); tft.println(Meteo.Sens + String::format("(%d) %3.1f km/h",Meteo.Direction,Meteo.Vitesse));
+  }
 #endif
   }
 }
@@ -575,8 +607,8 @@ void getRequest() {
   tft.setTextSize(1);
   tft.println(response.status);
 //  Serial.println(request.url);
-  Serial.println(response.status);
-  Serial.println(response.body);
+//  Serial.println(response.status);
+//  Serial.println(response.body);
   if (response.status == 200) { 
     String key1 = "WeatherText";
     Meteo.ciel = KeyJson(key1 , response.body);
@@ -585,17 +617,21 @@ void getRequest() {
     Meteo.Temperature = atof(KeyJson("Value",jsonTemp).c_str());
     Meteo.Humidite = atoi(KeyJson("RelativeHumidity",response.body).c_str());
     jsonTemp = KeyJson("Wind" , response.body);
-    Serial.println(jsonTemp);
+//    Serial.println(jsonTemp);
     Meteo.Direction = atoi(KeyJson("Degrees", jsonTemp).c_str());
     Meteo.Sens = KeyJson("Localized", response.body);
     jsonTemp = KeyJson("Speed" , response.body);
     Meteo.Vitesse = atof(KeyJson("Value" , jsonTemp).c_str());
-    tft.setCursor(1,112);
-    tft.setTextColor(ST7735_YELLOW,ST7735_BLACK);
-    tft.setTextSize(1);
-    tft.println(Meteo.ciel+" "+Meteo.Humidite);
-    tft.setCursor(5,22);tft.println(Meteo.Temperature);
     Meteo.data = true;
+  }
+  if (Meteo.data) {
+    Serial.println(Meteo.Humidite);
+    Serial.println(Meteo.Temperature);
+    Serial.println(Meteo.ciel);
+    Serial.println(Meteo.Sens);
+    Serial.println(Meteo.Direction);
+    Serial.println(Meteo.Vitesse);
+    Serial.println(String::format("-- %d / %d",int(('°')),int('a')));
   }
  }  
 
@@ -608,7 +644,7 @@ String KeyJson(const String& k, const String& j){
   int valueEndsAt = j.indexOf(",", colonPosition);
   String val = j.substring(colonPosition + 1, valueEndsAt);
   val.trim();
-  Serial.println( val );
+//  Serial.println( val );
   return val;
 }
 
