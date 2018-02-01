@@ -281,7 +281,9 @@ void loop()
       aff_Click();
     #endif
     serial_on = Serial.isConnected();
+    Serial.println("pret pour la photo ...");
     isPicture = take_picture();
+    Serial.println(String::format("take_picture return %d",isPicture));
     start = millis();
     tft_update = true;
     update = 0;
@@ -334,6 +336,7 @@ char take_picture() {
   if (!client.connected()) {
     if (!client.connect(SERVER_ADDRESS, SERVER_TCP_PORT)) {
       delay(2000);
+      Particle.process();
       return -1;
     }
   }
@@ -631,8 +634,9 @@ void getRequest() {
     Serial.println(Meteo.Sens);
     Serial.println(Meteo.Direction);
     Serial.println(Meteo.Vitesse);
-    Serial.println(String::format("-- %d / %d",int(('°')),int('a')));
+    Serial.println(String::format("-- %d / %d",int(('é')),int('a')));
   }
+  Particle.process();
  }  
 
 String KeyJson(const String& k, const String& j){
